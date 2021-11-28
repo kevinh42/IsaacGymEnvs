@@ -73,11 +73,17 @@ def launch_rlg_hydra(cfg: DictConfig):
     # sets seed. if seed is -1 will pick a random one
     cfg.seed = set_seed(cfg.seed, torch_deterministic=cfg.torch_deterministic)
 
+    # CamelCase to snake_case
+    import re
+    task_file = re.sub(r'(?<!^)(?=[A-Z])', '_', cfg.task_name).lower()
+    from pydoc import locate
+    task_class = locate(f'isaacgymenvs.tasks.{task_file}.{cfg.task_name}')
+
     # `create_rlgpu_env` is environment construction function which is passed to RL Games and called internally.
     # We use the helper function here to specify the environment config.
     create_rlgpu_env = get_rlgames_env_creator(
         omegaconf_to_dict(cfg.task),
-        cfg.task_name,
+        task_class,
         cfg.sim_device,
         cfg.rl_device,
         cfg.graphics_device_id,

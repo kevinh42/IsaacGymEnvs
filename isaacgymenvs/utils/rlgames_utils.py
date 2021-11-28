@@ -33,13 +33,13 @@ import torch
 import numpy as np
 from typing import Callable
 
-from ..tasks import isaacgym_task_map
+from isaacgymenvs.tasks import isaacgym_task_map
 
 
 def get_rlgames_env_creator(
         # used to create the vec task
         task_config: dict,
-        task_name: str,
+        task_class,
         sim_device: str,
         rl_device: str,
         graphics_device_id: int,
@@ -52,7 +52,7 @@ def get_rlgames_env_creator(
 
     Args:
         task_config: environment configuration.
-        task_name: Name of the task, used to evaluate based on the imported name (eg 'Trifinger')
+        task_class: Task class (eg 'Trifinger')
         sim_device: The type of env device, eg 'cuda:0'
         rl_device: Device that RL will be done on, eg 'cuda:0'
         graphics_device_id: Graphics device ID.
@@ -84,7 +84,7 @@ def get_rlgames_env_creator(
             _rl_device = rl_device
 
         # create native task and pass custom config
-        env = isaacgym_task_map[task_name](
+        env = task_class(
             cfg=task_config,
             sim_device=_sim_device,
             graphics_device_id=graphics_device_id,
