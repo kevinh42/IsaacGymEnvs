@@ -45,6 +45,7 @@ from rl_games.common import env_configurations, vecenv
 from rl_games.torch_runner import Runner
 
 import yaml
+import torch
 
 
 ## OmegaConf & Hydra Config
@@ -61,8 +62,8 @@ OmegaConf.register_new_resolver('resolve_default', lambda default, arg: default 
 def launch_rlg_hydra(cfg: DictConfig):
 
     # ensure checkpoints can be specified as relative paths
-    if cfg.checkpoint:
-        cfg.checkpoint = to_absolute_path(cfg.checkpoint)
+    assert cfg.checkpoint
+    cfg.checkpoint = to_absolute_path(cfg.checkpoint)
 
     cfg_dict = omegaconf_to_dict(cfg)
     print_dict(cfg_dict)
@@ -113,10 +114,32 @@ def launch_rlg_hydra(cfg: DictConfig):
     with open(os.path.join(experiment_dir, 'config.yaml'), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
 
-    runner.run({
-        'train': not cfg.test,
-        'play': cfg.test,
-    })
+    # Export ONNX
+    print("exporting!")
+    # Load model from checkpoint
+    player = runner.create_player()
+    player.restore(runner.load_path)
+    # Create dummy observations tensor for tracing torch model
+    obs_shape = player.obs_shape
+    actions_num = player.actions_num
+    dummy_input = torch.zeros(obs_shape, device='cuda:0')
+    dummy_input_unsqueeze = torch.unsqueeze(dummy_input,0)
+    dummy_input_dict = {
+        'obs' : dummy_input_unsqueeze,
+        'rnn_states' : None
+    }
+    # We need to flatten the inputs and outputs of the model: see https://github.com/Denys88/rl_games/issues/92
+    onnx_file = os.path.split(cfg.checkpoint)[-1]+".onnx"
+    import flatten as flatten
+    with torch.no_grad():
+        adapter = flatten.TracingAdapter(player.model.a2c_network, dummy_input_dict, allow_non_tensor=True)
+        torch.onnx.export(adapter, adapter.flattened_inputs, f"{cfg.checkpoint}.onnx", verbose=True, 
+            input_names = ['observations'],
+            output_names = ['actions'])
+        # traced = torch.jit.trace(adapter, dummy_input,check_trace=True)
+        # flattened_outputs = traced(*adapter.flattened_inputs)
+    print(f"exported to {cfg.checkpoint}.onnx!")
+   
 
 if __name__ == "__main__":
     launch_rlg_hydra()
