@@ -114,7 +114,7 @@ def launch_rlg_hydra(cfg: DictConfig):
     with open(os.path.join(experiment_dir, 'config.yaml'), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
 
-    # Export ONNX
+    # Export ONNX for inference
     print("exporting!")
     # Load model from checkpoint
     player = runner.create_player()
@@ -122,6 +122,7 @@ def launch_rlg_hydra(cfg: DictConfig):
     # Create dummy observations tensor for tracing torch model
     obs_shape = player.obs_shape
     actions_num = player.actions_num
+    obs_num = obs_shape[0]
     dummy_input = torch.zeros(obs_shape, device='cuda:0')
     dummy_input_unsqueeze = torch.unsqueeze(dummy_input,0)
     dummy_input_dict = {
@@ -135,11 +136,17 @@ def launch_rlg_hydra(cfg: DictConfig):
         adapter = flatten.TracingAdapter(player.model.a2c_network, dummy_input_dict, allow_non_tensor=True)
         torch.onnx.export(adapter, adapter.flattened_inputs, f"{cfg.checkpoint}.onnx", verbose=True, 
             input_names = ['observations'],
-            output_names = ['actions'])
+            output_names = ['actions']) # outputs are mu (actions), sigma, value
         # traced = torch.jit.trace(adapter, dummy_input,check_trace=True)
-        # flattened_outputs = traced(*adapter.flattened_inputs)
+        # flattened_outputs = traced(dummy_input)
     print(f"exported to {cfg.checkpoint}.onnx!")
-   
+
+    print("# Observations: ", obs_num)
+    print("# Actions: ", actions_num)
+    # Generate a controller configuration that can be loaded in gym2real
+    controller_config = f"{cfg.task_name}:\n\tobservations: {obs_num*4}\n\tactions: {actions_num*4}"
+    print(controller_config)
+
 
 if __name__ == "__main__":
     launch_rlg_hydra()
