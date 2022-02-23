@@ -64,6 +64,7 @@ class Twip(VecTask):
         #self.death_cost = self.cfg["env"]["deathCost"]
         #self.termination_height = self.cfg["env"]["terminationHeight"]
         self.reset_dist = self.cfg["env"]["resetDist"]
+        self.free_dofs = self.cfg["env"]["freeDofs"]
 
         self.debug_viz = self.cfg["env"]["enableDebugVis"]
         self.plane_static_friction = self.cfg["env"]["plane"]["staticFriction"]
@@ -153,10 +154,10 @@ class Twip(VecTask):
         print("Dofs: ", dof_names)
     
         if self.control_mode == "velocity":
-            motor_vels = [self.max_velocity for i in range(self.num_dof)]
+            motor_vels = [self.max_velocity for i in range(self.num_dof-len(self.free_dofs))]
             self.motor_out = to_torch(motor_vels, device=self.device)
         if self.control_mode == "effort":
-            motor_efforts = [self.max_effort for i in range(self.num_dof)]
+            motor_efforts = [self.max_effort for i in range(self.num_dof-len(self.free_dofs))]
             self.motor_out = to_torch(motor_efforts, device=self.device)
         
         self.ant_handles = []
@@ -180,13 +181,16 @@ class Twip(VecTask):
 
             dof_prop = self.gym.get_actor_dof_properties(env_ptr, robot_handle)
             if self.control_mode == "velocity":
-                dof_prop['driveMode'][:] = gymapi.DOF_MODE_VEL
+                dof_prop["driveMode"][:] = gymapi.DOF_MODE_VEL
                 dof_prop["stiffness"].fill(0.0)
                 dof_prop["damping"].fill(600.0)
             if self.control_mode == "effort":
-                dof_prop['driveMode'][:] = gymapi.DOF_MODE_EFFORT
+                dof_prop["driveMode"][:] = gymapi.DOF_MODE_EFFORT
                 dof_prop["stiffness"].fill(0.0)
                 dof_prop["damping"].fill(0.0)
+            dof_prop["driveMode"][self.free_dofs] = gymapi.DOF_MODE_NONE
+            dof_prop["stiffness"][self.free_dofs] = 0.0
+            dof_prop["damping"][self.free_dofs] = 0.0
             for j in range(self.num_dof):
                 if dof_prop['lower'][j] > dof_prop['upper'][j]:
                     self.dof_limits_lower.append(dof_prop['upper'][j])
@@ -224,8 +228,10 @@ class Twip(VecTask):
             self.apply_randomizations(self.randomization_params)
 
         positions = torch_rand_float(-0.2, 0.2, (len(env_ids), self.num_dof), device=self.device)
+        positions[:, self.free_dofs] = 0
         velocities = torch_rand_float(-0.25, 0.25, (len(env_ids), self.num_dof), device=self.device)
-
+        velocities[:, self.free_dofs] = 0
+        
         self.dof_pos[env_ids] = positions
         self.dof_vel[env_ids] = velocities
 
@@ -244,14 +250,19 @@ class Twip(VecTask):
 
     def pre_physics_step(self, actions):
         self.actions = actions.clone().to(self.device)
+        dof_idx = list(range(self.num_dof))
+        for i in self.free_dofs:
+            dof_idx.remove(i)
         if self.control_mode == "velocity":
+            vels = torch.zeros((self.actions.shape[0],self.num_dof)).to(self.device)
             #vels = torch.ones_like(self.actions) * self.motor_out
-            vels = self.actions * self.motor_out#  * self.gear_ratio
+            vels[:,dof_idx] = self.actions * self.motor_out
             vel_tensor = gymtorch.unwrap_tensor(vels)
             self.gym.set_dof_velocity_target_tensor(self.sim, vel_tensor)
         if self.control_mode == "effort":
+            forces = torch.zeros((self.actions.shape[0],self.num_dof)).to(self.device)
             #forces = torch.ones_like(self.actions) * self.motor_out * self.gear_ratio
-            forces = self.actions * self.motor_out#  * self.gear_ratio
+            forces[:, dof_idx] = self.actions * self.motor_out#  * self.gear_ratio
             force_tensor = gymtorch.unwrap_tensor(forces)
             self.gym.set_dof_actuation_force_tensor(self.sim, force_tensor)
 
