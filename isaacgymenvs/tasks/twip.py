@@ -50,7 +50,11 @@ class Twip(VecTask):
         self.randomize = self.cfg["task"]["randomize"]
         #self.dof_vel_scale = self.cfg["env"]["dofVelocityScale"]
         #self.contact_force_scale = self.cfg["env"]["contactForceScale"]
-        self.max_effort = self.cfg["env"]["maxEffort"]
+        self.control_mode = self.cfg["env"]["controlMode"]
+        if self.control_mode == "velocity":
+            self.max_velocity = self.cfg["env"]["maxVelocity"]
+        if self.control_mode == "effort":
+            self.max_effort = self.cfg["env"]["maxEffort"]
         self.gear_ratio = self.cfg["env"]["gearRatio"]
         #self.heading_weight = self.cfg["env"]["headingWeight"]
         #self.up_weight = self.cfg["env"]["upWeight"]
@@ -124,18 +128,21 @@ class Twip(VecTask):
         asset_file = os.path.basename(asset_path)
 
         asset_options = gymapi.AssetOptions()
-        asset_options.default_dof_drive_mode = gymapi.DOF_MODE_EFFORT
+        if self.control_mode == "velocity":
+            asset_options.default_dof_drive_mode = gymapi.DOF_MODE_VEL
+        if self.control_mode == "effort":
+            asset_options.default_dof_drive_mode = gymapi.DOF_MODE_EFFORT
         #asset_options.angular_damping = 0.0
 
         ant_asset = self.gym.load_asset(self.sim, asset_root, asset_file, asset_options)
 
         # = self.gym.get_asset_actuator_properties(ant_asset)        
         start_pose = gymapi.Transform()
-        start_pose.p = gymapi.Vec3(*get_axis_params(0.6, self.up_axis_idx))
+        start_pose.p = gymapi.Vec3(*get_axis_params(0.1, self.up_axis_idx))
 
         #self.start_rotation = torch.tensor([start_pose.r.x, start_pose.r.y, start_pose.r.z, start_pose.r.w], device=self.device)
 
-        self.imu_frame_index = 1
+        self.imu_frame_index = 0
         self.num_bodies = self.gym.get_asset_rigid_body_count(ant_asset)
         body_names = [self.gym.get_asset_rigid_body_name(ant_asset, i) for i in range(self.num_bodies)]
         self.num_dof = self.gym.get_asset_dof_count(ant_asset)
@@ -144,10 +151,14 @@ class Twip(VecTask):
         # self.extremities_index = torch.zeros(len(extremity_names), dtype=torch.long, device=self.device)
         print("Bodies: ", body_names)
         print("Dofs: ", dof_names)
-
-        motor_efforts = [self.max_effort for i in range(self.num_dof)]
-        self.joint_gears = to_torch(motor_efforts, device=self.device)
-
+    
+        if self.control_mode == "velocity":
+            motor_vels = [self.max_velocity for i in range(self.num_dof)]
+            self.motor_out = to_torch(motor_vels, device=self.device)
+        if self.control_mode == "effort":
+            motor_efforts = [self.max_effort for i in range(self.num_dof)]
+            self.motor_out = to_torch(motor_efforts, device=self.device)
+        
         self.ant_handles = []
         self.envs = []
         self.dof_limits_lower = []
@@ -168,7 +179,14 @@ class Twip(VecTask):
             self.ant_handles.append(robot_handle)
 
             dof_prop = self.gym.get_actor_dof_properties(env_ptr, robot_handle)
-            #dof_prop['driveMode'][:] = gymapi.DOF_MODE_EFFORT
+            if self.control_mode == "velocity":
+                dof_prop['driveMode'][:] = gymapi.DOF_MODE_VEL
+                dof_prop["stiffness"].fill(0.0)
+                dof_prop["damping"].fill(600.0)
+            if self.control_mode == "effort":
+                dof_prop['driveMode'][:] = gymapi.DOF_MODE_EFFORT
+                dof_prop["stiffness"].fill(0.0)
+                dof_prop["damping"].fill(0.0)
             for j in range(self.num_dof):
                 if dof_prop['lower'][j] > dof_prop['upper'][j]:
                     self.dof_limits_lower.append(dof_prop['upper'][j])
@@ -176,7 +194,7 @@ class Twip(VecTask):
                 else:
                     self.dof_limits_lower.append(dof_prop['lower'][j])
                     self.dof_limits_upper.append(dof_prop['upper'][j])
-            #self.gym.set_actor_dof_properties(env_ptr, robot_handle, dof_prop)
+            self.gym.set_actor_dof_properties(env_ptr, robot_handle, dof_prop)
         
     def compute_reward(self, actions):
         self.rew_buf[:], self.reset_buf[:] = compute_twip_reward(
@@ -226,9 +244,16 @@ class Twip(VecTask):
 
     def pre_physics_step(self, actions):
         self.actions = actions.clone().to(self.device)
-        forces = self.actions * self.joint_gears * self.gear_ratio
-        force_tensor = gymtorch.unwrap_tensor(forces)
-        self.gym.set_dof_actuation_force_tensor(self.sim, force_tensor)
+        if self.control_mode == "velocity":
+            #vels = torch.ones_like(self.actions) * self.motor_out
+            vels = self.actions * self.motor_out#  * self.gear_ratio
+            vel_tensor = gymtorch.unwrap_tensor(vels)
+            self.gym.set_dof_velocity_target_tensor(self.sim, vel_tensor)
+        if self.control_mode == "effort":
+            #forces = torch.ones_like(self.actions) * self.motor_out * self.gear_ratio
+            forces = self.actions * self.motor_out#  * self.gear_ratio
+            force_tensor = gymtorch.unwrap_tensor(forces)
+            self.gym.set_dof_actuation_force_tensor(self.sim, force_tensor)
 
     def post_physics_step(self):
         self.progress_buf += 1
@@ -284,23 +309,29 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
 
     num_envs = ori.shape[0]
     #vertical = torch.tensor((-0.707107, 0.0, 0.0, 0.707107),device=ori_x.device).repeat(num_envs,1)
-    vertical = torch.tensor((0.0, 0.0, 0.0, 1.0),device=ori_x.device).repeat(num_envs,1)
-    pole_angle = torch.bmm(ori.view(num_envs, 1, 4), vertical.view(num_envs, 4, 1)).view(num_envs) 
-    # pole angle is dot product between 0 and 1, with 1 being exactly vertical
+    #vertical = torch.tensor((0.0, 0.0, 0.0, 1.0),device=ori_x.device).repeat(num_envs,1)
+    #pole_angle = torch.bmm(ori.view(num_envs, 1, 4), vertical.view(num_envs, 4, 1)).view(num_envs) 
+    
+    # We want to look at the pitch to determine reward/reset
+    x = torch.atan2(2*(ori_w*ori_x+ori_y*ori_z),1-2*(ori_x**2+ori_y**2)) #pitch (0 when vertical)
+    # y = torch.asin(2*(ori_w*ori_y-ori_x*ori_z)) #yaw
+    # z = torch.atan2(2*(ori_w*ori_z+ori_y*ori_x),1-2*(ori_y**2+ori_z**2)) #roll
+    pole_angle = 1 - torch.abs(x)
+
     cart_vel = torch.norm(vel, 2, 1)
 
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
-    reward = pole_angle - 0.1 * torch.abs(cart_vel)
+    reward = pole_angle + 0.1 * torch.abs(cart_vel)
 
-    # # adjust reward for reset agents
+    # adjust reward for reset agents
     #reward = torch.where(torch.abs(cart_pos) > reset_dist, torch.ones_like(reward) * -2.0, reward)
     #reward = torch.where(torch.abs(pole_angle) > np.pi / 2, torch.ones_like(reward) * -2.0, reward)
-    reward = torch.where(torch.abs(pole_angle) < 0.7, torch.ones_like(reward) * -2.0, reward)
+    reward = torch.where(torch.abs(pole_angle) < 0.77, torch.ones_like(reward) * -2.0, reward)
 
     #reset = torch.where(torch.abs(cart_pos) > reset_dist, torch.ones_like(reset_buf), reset_buf)
     #reset = torch.where(torch.abs(pole_angle) > np.pi / 2, torch.ones_like(reset_buf), reset)
-    reset = torch.where(torch.abs(pole_angle) < 0.7, torch.ones_like(reset_buf), reset_buf)
+    reset = torch.where(torch.abs(pole_angle) < 0.77, torch.ones_like(reset_buf), reset_buf)
     reset = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset)
 
     return reward, reset

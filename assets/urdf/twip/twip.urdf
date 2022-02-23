@@ -1,114 +1,99 @@
-<?xml version="1.0" encoding="utf-8"?>
 <robot name="twip">
     <link name="body">
         <visual>
-            <origin xyz="0 0 -0.205" rpy="0 -0 0" />
+            <origin xyz="0 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="meshes/body.stl" />
+                <mesh filename="meshes/body_visual.stl" />
             </geometry>
             <material name="body_material">
-                <color rgba="0.615686 0.811765 0.929412 1.0" />
+                <color rgba="0.591122 0.530691 0.356737 1.0" />
             </material>
         </visual>
         <collision>
-            <origin xyz="0 0 -0.205" rpy="0 -0 0" />
+            <origin xyz="0 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="meshes/body.stl" />
+                <mesh filename="meshes/body_collision.stl" />
             </geometry>
             <material name="body_material">
-                <color rgba="0.615686 0.811765 0.929412 1.0" />
+                <color rgba="0.5 0.5 0.5 1.0" />
             </material>
         </collision>
         <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <mass value="2.0" />
-            <inertia ixx="1e-3" ixy="0" ixz="0" iyy="1e-3" iyz="0" izz="1e-3" />
+            <origin xyz="-9.64262e-05 1.22202e-06 0.143667" rpy="0 0 0" />
+            <mass value="1.1781" />
+            <inertia ixx="0.0243492" ixy="-4.37564e-09" ixz="2.17467e-06" iyy="0.0239017" iyz="-4.5225e-08" izz="0.00801393" />
         </inertial>
     </link>
-
-    <link name="centre">
-        <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <mass value="0" />
-            <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0" />
-        </inertial>
-    </link>
-    <joint name="centre_frame" type="fixed">
-        <origin xyz="0 0 -0.205" rpy="0 -0 0" />
-        <parent link="body" />
-        <child link="centre" />
-        <axis xyz="0 0 0" />
-    </joint>
 
     <link name="left_wheel">
         <visual>
-            <origin xyz="0 0.205 0.155" rpy="-1.5708 -1.5708 0" />
+            <origin xyz="0 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="meshes/left_wheel.stl" />
+                <mesh filename="meshes/left_wheel_visual.stl" />
             </geometry>
             <material name="left_wheel_material">
-                <color rgba="0.647059 0.647059 0.647059 1.0" />
+                <color rgba="0.701961 0.701961 0.701961 1.0" />
             </material>
         </visual>
         <collision>
-            <origin xyz="0 0.205 0.155" rpy="-1.5708 -1.5708 0" />
+            <origin xyz="0 0 0" rpy="0 -0 0" />
             <geometry>
-                <mesh filename="meshes/left_wheel.stl" />
+                <mesh filename="meshes/left_wheel_collision.stl" />
             </geometry>
             <material name="left_wheel_material">
-                <color rgba="0.647059 0.647059 0.647059 1.0" />
+                <color rgba="0.5 0.5 0.5 1.0" />
             </material>
         </collision>
         <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <mass value="0.3" />
-            <!-- <inertia ixx="1e-3" ixy="0" ixz="0" iyy="1e-3" iyz="0" izz="1e-3" /> -->
-        </inertial>
-    </link>
-
-    <link name="right_wheel">
-        <visual>
-            <origin xyz="0 -0.205 0.155" rpy="1.5708 1.5708 0" />
-            <geometry>
-                <mesh filename="meshes/right_wheel.stl" />
-            </geometry>
-            <material name="right_wheel_material">
-                <color rgba="0.647059 0.647059 0.647059 1.0" />
-            </material>
-        </visual>
-        <collision>
-            <origin xyz="0 -0.205 0.155" rpy="1.5708 1.5708 0" />
-            <geometry>
-                <mesh filename="meshes/right_wheel.stl" />
-            </geometry>
-            <material name="right_wheel_material">
-                <color rgba="0.647059 0.647059 0.647059 1.0" />
-            </material>
-        </collision>
-        <inertial>
-            <origin xyz="0 0 0" rpy="0 0 0" />
-            <mass value="0.3" />
-            <!-- <inertia ixx="1e-3" ixy="0" ixz="0" iyy="1e-3" iyz="0" izz="1e-3" /> -->
+            <origin xyz="0 0 -0.014" rpy="0 0 0" />
+            <mass value="0.410645" />
+            <inertia ixx="0.000429492" ixy="5.2939e-36" ixz="0" iyy="0.000805326" iyz="0" izz="0.000429492" />
         </inertial>
     </link>
 
     <joint name="lwheel" type="revolute">
-        <origin xyz="-0.155 0 -0.41" rpy="1.5708 -0 1.5708" />
+        <origin xyz="-0.135148 -2.90755e-05 -0.03878" rpy="1.5708 -0 1.5708" />
         <parent link="body" />
         <child link="left_wheel" />
         <axis xyz="0 0 1" />
-        <limit effort="1"/>
-        <joint_properties friction="1.0" />
-        <dynamics damping="0.0" friction="1.0"/>
+        <limit effort="1" velocity="20" />
+        <joint_properties friction="0.0" />
     </joint>
 
+    <link name="right_wheel">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="meshes/right_wheel_visual.stl" />
+            </geometry>
+            <material name="right_wheel_material">
+                <color rgba="0.701961 0.701961 0.701961 1.0" />
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="meshes/right_wheel_collision.stl" />
+            </geometry>
+            <material name="right_wheel_material">
+                <color rgba="0.5 0.5 0.5 1.0" />
+            </material>
+        </collision>
+        <inertial>
+            <origin xyz="0 0 -0.014" rpy="0 0 0" />
+            <mass value="0.410645" />
+            <inertia ixx="0.000429492" ixy="0" ixz="0" iyy="0.000805326" iyz="0" izz="0.000429492" />
+        </inertial>
+    </link>
+
     <joint name="rwheel" type="revolute">
-        <origin xyz="0.155 0 -0.41" rpy="-1.5708 -0 1.5708" />
+        <origin xyz="0.135148 2.90755e-05 -0.03878" rpy="-1.5708 -0 1.5708" />
         <parent link="body" />
         <child link="right_wheel" />
         <axis xyz="0 0 1" />
-        <limit effort="1"/>
-        <joint_properties friction="1.0" />
-        <dynamics damping="0.0" friction="1.0"/>
+        <limit effort="1" velocity="20" />
+        <joint_properties friction="0.0" />
     </joint>
+
+
 </robot>

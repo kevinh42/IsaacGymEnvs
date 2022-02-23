@@ -11,9 +11,12 @@ env:
   episodeLength: 1000
   enableDebugVis: False
 
+  controlMode: "velocity" # "velocity" or "effort"
+  maxVelocity: 8.38 # 80 RPM
+  maxEffort: 1.0
+
   resetDist: 3.0
-  maxEffort: 4.0
-  gearRatio: 15.0
+  gearRatio: 1.0
   clipActions: 1.0
   controlFrequencyInv: 1 # 240 Hz
 
@@ -46,7 +49,7 @@ sim:
     solver_type: ${....solver_type}
     use_gpu: ${contains:"cuda",${....sim_device}} # set to False to run on CPU
     num_position_iterations: 4
-    num_velocity_iterations: 0
+    num_velocity_iterations: 1
     contact_offset: 0.02
     rest_offset: 0.0
     bounce_threshold_velocity: 0.2
@@ -77,13 +80,26 @@ task:
             range: [0.5, 1.5]
             operation: "scaling"
             distribution: "uniform"
-            setup_only: True # Property will only be randomized once before simulation is started. See Domain Randomization Documentation for more info.
-        # dof_properties:
-        #   damping: 
-        #     range: [0.5, 1.5]
-        #     operation: "scaling"
-        #     distribution: "uniform"
-        #   stiffness: 
-        #     range: [0.5, 1.5]
-        #     operation: "scaling"
-        #     distribution: "uniform"
+            setup_only: False # If True, property will only be randomized once before simulation is started. See Domain Randomization Documentation for more info.
+          # inertia:
+          #   range: [0.5, 1.5]
+          #   operation: "scaling"
+          #   distribution: "uniform"
+          #   setup_only: False
+        rigid_shape_properties:
+          friction: 
+            range: [0.5, 1.5]
+            operation: "scaling"
+            distribution: "uniform"
+            setup_only: False 
+        dof_properties:
+          damping: 
+            range: [0.5, 1.5]
+            operation: "scaling"
+            distribution: "uniform"
+            setup_only: False
+          # armature:
+          #   range: [-0.5, 0.5]
+          #   operation: "additive"
+          #   distribution: "uniform"
+          #   setup_only: False
