@@ -71,7 +71,7 @@ class Twip(VecTask):
         self.plane_dynamic_friction = self.cfg["env"]["plane"]["dynamicFriction"]
         self.plane_restitution = self.cfg["env"]["plane"]["restitution"]
 
-        self.cfg["env"]["numObservations"] = 7
+        self.cfg["env"]["numObservations"] = 4
         self.cfg["env"]["numActions"] = 2
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
@@ -218,7 +218,7 @@ class Twip(VecTask):
         # print("NaN: ", torch.sum(torch.isnan(self.initial_root_states)))
 
         self.obs_buf[env_ids,0:4] = self.body_ori[env_ids,self.imu_frame_index].squeeze() #chassis orientation
-        self.obs_buf[env_ids,4:7] = self.body_linvel[env_ids,self.imu_frame_index].squeeze() #chassis linvel
+        #self.obs_buf[env_ids,4:7] = self.body_linvel[env_ids,self.imu_frame_index].squeeze() #chassis linvel
 
         return self.obs_buf
 
@@ -311,12 +311,12 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     ori_y = obs_buf[:, 1]
     ori_z = obs_buf[:, 2]
     ori_w = obs_buf[:, 3]
-    vel_x = obs_buf[:, 4]
-    vel_y = obs_buf[:, 5]
-    vel_z = obs_buf[:, 6]
+    # vel_x = obs_buf[:, 4]
+    # vel_y = obs_buf[:, 5]
+    # vel_z = obs_buf[:, 6]
 
     ori = torch.stack((ori_x,ori_y,ori_z,ori_w)).transpose(0,1)
-    vel = torch.stack((vel_x,vel_y,vel_z)).transpose(0,1)
+    #vel = torch.stack((vel_x,vel_y,vel_z)).transpose(0,1)
 
     num_envs = ori.shape[0]
     #vertical = torch.tensor((-0.707107, 0.0, 0.0, 0.707107),device=ori_x.device).repeat(num_envs,1)
@@ -329,11 +329,11 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     # z = torch.atan2(2*(ori_w*ori_z+ori_y*ori_x),1-2*(ori_y**2+ori_z**2)) #roll
     pole_angle = 1 - torch.abs(x)
 
-    cart_vel = torch.norm(vel, 2, 1)
+    #cart_vel = torch.norm(vel, 2, 1)
 
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
-    reward = pole_angle + 0.1 * torch.abs(cart_vel)
+    reward = pole_angle #+ 0.1 * torch.abs(cart_vel)
 
     # adjust reward for reset agents
     #reward = torch.where(torch.abs(cart_pos) > reset_dist, torch.ones_like(reward) * -2.0, reward)
