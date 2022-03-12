@@ -13,6 +13,7 @@ env:
 
   controlMode: "velocity" # "velocity" or "effort"
   maxVelocity: 8.38 # 80 RPM
+  minVelocity: 2. # 29 RPM ; velocity threshold before motor can actually move
   maxEffort: 1.0
 
   resetDist: 3.0
@@ -40,7 +41,7 @@ env:
   enableCameraSensors: False
 
 sim:
-  dt: 0.004167 # 1/240 s
+  dt: 0.005 # 1/200 s
   substeps: 2
   up_axis: "z"
   use_gpu_pipeline: ${eq:${...pipeline},"gpu"}

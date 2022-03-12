@@ -53,6 +53,7 @@ class Twip(VecTask):
         self.control_mode = self.cfg["env"]["controlMode"]
         if self.control_mode == "velocity":
             self.max_velocity = self.cfg["env"]["maxVelocity"]
+            self.min_velocity = self.cfg["env"]["minVelocity"]
         if self.control_mode == "effort":
             self.max_effort = self.cfg["env"]["maxEffort"]
         self.gear_ratio = self.cfg["env"]["gearRatio"]
@@ -219,7 +220,7 @@ class Twip(VecTask):
 
         self.obs_buf[env_ids,0:4] = self.body_ori[env_ids,self.imu_frame_index].squeeze() #chassis orientation
         #self.obs_buf[env_ids,4:7] = self.body_linvel[env_ids,self.imu_frame_index].squeeze() #chassis linvel
-
+        #self.obs_buf[:,:] = 0.
         return self.obs_buf
 
     def reset_idx(self, env_ids):
@@ -250,6 +251,7 @@ class Twip(VecTask):
 
     def pre_physics_step(self, actions):
         self.actions = actions.clone().to(self.device)
+        print(self.actions)
         dof_idx = list(range(self.num_dof))
         for i in self.free_dofs:
             dof_idx.remove(i)
@@ -257,6 +259,7 @@ class Twip(VecTask):
             vels = torch.zeros((self.actions.shape[0],self.num_dof)).to(self.device)
             #vels = torch.ones_like(self.actions) * self.motor_out
             vels[:,dof_idx] = self.actions * self.motor_out
+            vels[torch.abs(vels)<=self.min_velocity] = 0. #if below min velocity set to 0
             vel_tensor = gymtorch.unwrap_tensor(vels)
             self.gym.set_dof_velocity_target_tensor(self.sim, vel_tensor)
         if self.control_mode == "effort":
