@@ -73,7 +73,7 @@ class Twip(VecTask):
         self.plane_restitution = self.cfg["env"]["plane"]["restitution"]
 
         self.cfg["env"]["numObservations"] = 4
-        self.cfg["env"]["numActions"] = 2
+        self.cfg["env"]["numActions"] = 1 #2
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
 
@@ -230,11 +230,30 @@ class Twip(VecTask):
 
         positions = torch_rand_float(-0.2, 0.2, (len(env_ids), self.num_dof), device=self.device)
         positions[:, self.free_dofs] = 0
-        velocities = torch_rand_float(-0.25, 0.25, (len(env_ids), self.num_dof), device=self.device)
+        velocities = torch_rand_float(-self.max_velocity, self.max_velocity, (len(env_ids), self.num_dof), device=self.device)
         velocities[:, self.free_dofs] = 0
         
         self.dof_pos[env_ids] = positions
         self.dof_vel[env_ids] = velocities
+
+        pitch = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device)
+        roll = torch_rand_float(0, 0.22, (len(env_ids), 1), device=self.device)
+        yaw = torch_rand_float(0, 3.14159, (len(env_ids), 1), device=self.device)
+
+        cy = torch.cos(yaw*0.5)
+        sy = torch.sin(yaw*0.5)
+        cp = torch.cos(pitch*0.5)
+        sp = torch.sin(pitch*0.5)
+        cr = torch.cos(roll*0.5)
+        sr = torch.sin(roll*0.5)
+
+        xs = sr * cp * cy - cr * sp * sy
+        ys = cr * sp * cy + sr * cp * sy
+        zs = cr * cp * sy - sr * sp * cy
+        ws = cr * cp * cy + sr * sp * sy
+        oris = torch.cat([xs,ys,zs,ws], dim=1)
+        oris = oris/torch.norm(oris,p='fro',dim=1).unsqueeze(dim=1)
+        self.initial_root_states[env_ids,3:7] = oris
 
         env_ids_int32 = env_ids.to(dtype=torch.int32)
 
@@ -249,9 +268,11 @@ class Twip(VecTask):
         self.progress_buf[env_ids] = 0
         self.reset_buf[env_ids] = 0
 
+
     def pre_physics_step(self, actions):
         self.actions = actions.clone().to(self.device)
-        print(self.actions)
+        #print(self.actions)
+        #self.actions[:] = 1
         dof_idx = list(range(self.num_dof))
         for i in self.free_dofs:
             dof_idx.remove(i)
@@ -259,6 +280,7 @@ class Twip(VecTask):
             vels = torch.zeros((self.actions.shape[0],self.num_dof)).to(self.device)
             #vels = torch.ones_like(self.actions) * self.motor_out
             vels[:,dof_idx] = self.actions * self.motor_out
+            #print(vels)
             vels[torch.abs(vels)<=self.min_velocity] = 0. #if below min velocity set to 0
             vel_tensor = gymtorch.unwrap_tensor(vels)
             self.gym.set_dof_velocity_target_tensor(self.sim, vel_tensor)
@@ -330,22 +352,21 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     x = torch.atan2(2*(ori_w*ori_x+ori_y*ori_z),1-2*(ori_x**2+ori_y**2)) #pitch (0 when vertical)
     # y = torch.asin(2*(ori_w*ori_y-ori_x*ori_z)) #yaw
     # z = torch.atan2(2*(ori_w*ori_z+ori_y*ori_x),1-2*(ori_y**2+ori_z**2)) #roll
-    pole_angle = 1 - torch.abs(x)
+    pole_angle = torch.abs(x)
+    #pole_angle[:]=0.5
+    #pole_angle[pole_angle> 1-(1*0.01745)] = 1 #max reward within about +-1 degrees
 
     #cart_vel = torch.norm(vel, 2, 1)
 
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
-    reward = pole_angle #+ 0.1 * torch.abs(cart_vel)
+    reward = 1.0 - pole_angle #+ 0.1 * torch.abs(cart_vel)
 
     # adjust reward for reset agents
-    #reward = torch.where(torch.abs(cart_pos) > reset_dist, torch.ones_like(reward) * -2.0, reward)
-    #reward = torch.where(torch.abs(pole_angle) > np.pi / 2, torch.ones_like(reward) * -2.0, reward)
-    reward = torch.where(torch.abs(pole_angle) < 0.77, torch.ones_like(reward) * -2.0, reward)
+    #reward = torch.where(torch.abs(pole_angle) > 0.25, torch.ones_like(reward) * -2.0, reward)
+    reward = torch.where(torch.abs(pole_angle) > 0.5, torch.ones_like(reward) * -2.0, reward)
 
-    #reset = torch.where(torch.abs(cart_pos) > reset_dist, torch.ones_like(reset_buf), reset_buf)
-    #reset = torch.where(torch.abs(pole_angle) > np.pi / 2, torch.ones_like(reset_buf), reset)
-    reset = torch.where(torch.abs(pole_angle) < 0.77, torch.ones_like(reset_buf), reset_buf)
+    reset = torch.where(torch.abs(pole_angle) > 0.5, torch.ones_like(reset_buf), reset_buf)
     reset = torch.where(progress_buf >= max_episode_length - 1, torch.ones_like(reset_buf), reset)
 
     return reward, reset
