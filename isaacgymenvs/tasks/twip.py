@@ -72,7 +72,7 @@ class Twip(VecTask):
         self.plane_dynamic_friction = self.cfg["env"]["plane"]["dynamicFriction"]
         self.plane_restitution = self.cfg["env"]["plane"]["restitution"]
 
-        self.cfg["env"]["numObservations"] = 4
+        self.cfg["env"]["numObservations"] = 3
         self.cfg["env"]["numActions"] = 1 #2
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
@@ -216,11 +216,30 @@ class Twip(VecTask):
         self.gym.refresh_rigid_body_state_tensor(self.sim)
         
         #NaN Check
-        # print("NaN: ", torch.sum(torch.isnan(self.initial_root_states)))
+        # print("NaN: ", torch.sum(torch.isnan(self.ifree_dofsnitial_root_states)))
 
-        self.obs_buf[env_ids,0:4] = self.body_ori[env_ids,self.imu_frame_index].squeeze() #chassis orientation
+
+        # Get body pitch as first input
+        quat = self.body_ori[env_ids,self.imu_frame_index].squeeze()
+        ori_x = quat[:, 0]
+        ori_y = quat[:, 1]
+        ori_z = quat[:, 2]
+        ori_w = quat[:, 3]
+        x = torch.atan2(2*(ori_w*ori_x+ori_y*ori_z),1-2*(ori_x**2+ori_y**2)) #pitch (0 when vertical)
+        self.obs_buf[env_ids,0] = x
+
+        # Get last action as second input
+        self.obs_buf[env_ids,1] = self.actions[env_ids,0]
+
+        # Get wheel position as third input
+        dof_idx = list(range(self.num_dof))
+        for i in self.free_dofs:
+            dof_idx.remove(i)
+        self.obs_buf[env_ids,2] = torch.tanh(torch.mean(self.dof_pos[env_ids][:,dof_idx],dim=1))
+
+        #self.obs_buf[env_ids,0:4] = self.body_ori[env_ids,self.imu_frame_index].squeeze() #chassis orientation
         #self.obs_buf[env_ids,4:7] = self.body_linvel[env_ids,self.imu_frame_index].squeeze() #chassis linvel
-        #self.obs_buf[:,:] = 0.
+
         return self.obs_buf
 
     def reset_idx(self, env_ids):
@@ -230,15 +249,18 @@ class Twip(VecTask):
 
         positions = torch_rand_float(-0.2, 0.2, (len(env_ids), self.num_dof), device=self.device)
         positions[:, self.free_dofs] = 0
-        velocities = torch_rand_float(-self.max_velocity, self.max_velocity, (len(env_ids), self.num_dof), device=self.device)
-        velocities[:, self.free_dofs] = 0
         
+        vel_dir = (torch.randint(0,2,(len(env_ids), 1),dtype=torch.float, device=self.device)*2-1).repeat(1,self.num_dof)
+        velocities = torch_rand_float(0, self.max_velocity, (len(env_ids), 1), device=self.device).repeat(1,self.num_dof) * vel_dir
+        velocities[:, self.free_dofs] = 0
+           
         self.dof_pos[env_ids] = positions
         self.dof_vel[env_ids] = velocities
 
+        roll_dir = (torch.randint(0,2,(len(env_ids), 1),dtype=torch.float, device=self.device)*2-1)
         pitch = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device)
-        roll = torch_rand_float(0, 0.22, (len(env_ids), 1), device=self.device)
-        yaw = torch_rand_float(0, 3.14159, (len(env_ids), 1), device=self.device)
+        roll = torch_rand_float(0.15, 0.24, (len(env_ids), 1), device=self.device) * roll_dir
+        yaw = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device)
 
         cy = torch.cos(yaw*0.5)
         sy = torch.sin(yaw*0.5)
@@ -332,27 +354,30 @@ class Twip(VecTask):
 def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episode_length):
     # type: (Tensor, float, Tensor, Tensor, float) -> Tuple[Tensor, Tensor]
 
-    ori_x = obs_buf[:, 0]
-    ori_y = obs_buf[:, 1]
-    ori_z = obs_buf[:, 2]
-    ori_w = obs_buf[:, 3]
+    # ori_x = obs_buf[:, 0]
+    # ori_y = obs_buf[:, 1]
+    # ori_z = obs_buf[:, 2]
+    # ori_w = obs_buf[:, 3]
     # vel_x = obs_buf[:, 4]
     # vel_y = obs_buf[:, 5]
     # vel_z = obs_buf[:, 6]
 
-    ori = torch.stack((ori_x,ori_y,ori_z,ori_w)).transpose(0,1)
-    #vel = torch.stack((vel_x,vel_y,vel_z)).transpose(0,1)
+    # ori = torch.stack((ori_x,ori_y,ori_z,ori_w)).transpose(0,1)
+    # #vel = torch.stack((vel_x,vel_y,vel_z)).transpose(0,1)
 
-    num_envs = ori.shape[0]
+    # num_envs = ori.shape[0]
     #vertical = torch.tensor((-0.707107, 0.0, 0.0, 0.707107),device=ori_x.device).repeat(num_envs,1)
     #vertical = torch.tensor((0.0, 0.0, 0.0, 1.0),device=ori_x.device).repeat(num_envs,1)
     #pole_angle = torch.bmm(ori.view(num_envs, 1, 4), vertical.view(num_envs, 4, 1)).view(num_envs) 
     
     # We want to look at the pitch to determine reward/reset
-    x = torch.atan2(2*(ori_w*ori_x+ori_y*ori_z),1-2*(ori_x**2+ori_y**2)) #pitch (0 when vertical)
+    # x = torch.atan2(2*(ori_w*ori_x+ori_y*ori_z),1-2*(ori_x**2+ori_y**2)) #pitch (0 when vertical)
     # y = torch.asin(2*(ori_w*ori_y-ori_x*ori_z)) #yaw
     # z = torch.atan2(2*(ori_w*ori_z+ori_y*ori_x),1-2*(ori_y**2+ori_z**2)) #roll
-    pole_angle = torch.abs(x)
+    #pole_angle = torch.abs(x)
+    pole_angle = torch.abs(obs_buf[:,0])
+    last_vel = torch.abs(obs_buf[:,1])
+    pos = torch.abs(obs_buf[:,2])
     #pole_angle[:]=0.5
     #pole_angle[pole_angle> 1-(1*0.01745)] = 1 #max reward within about +-1 degrees
 
@@ -360,7 +385,8 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
 
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
-    reward = 1.0 - pole_angle #+ 0.1 * torch.abs(cart_vel)
+    #reward = 1.0 - pole_angle #+ 0.1 * torch.abs(cart_vel)
+    reward = 1.0 - torch.tanh(8*pole_angle) - 0.01 * torch.tanh(2*last_vel) - 0.05 * pos
 
     # adjust reward for reset agents
     #reward = torch.where(torch.abs(pole_angle) > 0.25, torch.ones_like(reward) * -2.0, reward)
