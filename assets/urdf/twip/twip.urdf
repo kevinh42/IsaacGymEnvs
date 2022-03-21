@@ -6,7 +6,7 @@
                 <mesh filename="meshes/body_visual.stl" />
             </geometry>
             <material name="body_material">
-                <color rgba="0.591122 0.530691 0.356737 1.0" />
+                <color rgba="0.776927 0.691225 0.269091 1.0" />
             </material>
         </visual>
         <collision>
@@ -19,9 +19,9 @@
             </material>
         </collision>
         <inertial>
-            <origin xyz="-9.64262e-05 1.22202e-06 0.143667" rpy="0 0 0" />
-            <mass value="1.1781" />
-            <inertia ixx="0.0243492" ixy="-4.37564e-09" ixz="2.17467e-06" iyy="0.0239017" iyz="-4.5225e-08" izz="0.00801393" />
+            <origin xyz="-0.0842181 -0.077673 0.12622" rpy="0 0 0" />
+            <mass value="0.850962" />
+            <inertia ixx="0.0123089" ixy="1.69134e-05" ixz="-2.10054e-07" iyy="0.0137691" iyz="-7.02999e-05" izz="0.00469347" />
         </inertial>
     </link>
 
@@ -45,14 +45,14 @@
             </material>
         </collision>
         <inertial>
-            <origin xyz="0 0 -0.014" rpy="0 0 0" />
+            <origin xyz="1.61778e-34 0 -0.014" rpy="0 0 0" />
             <mass value="0.410645" />
-            <inertia ixx="0.000429492" ixy="5.2939e-36" ixz="0" iyy="0.000805326" iyz="0" izz="0.000429492" />
+            <inertia ixx="0.000429492" ixy="-4.48014e-45" ixz="3.74812e-36" iyy="0.000805326" iyz="-1.73719e-36" izz="0.000429492" />
         </inertial>
     </link>
 
     <joint name="lwheel" type="revolute">
-        <origin xyz="-0.135148 -2.90755e-05 -0.03878" rpy="1.5708 -0 1.5708" />
+        <origin xyz="0.0509238 -0.0784359 -0.0289244" rpy="-3.14159 1.5708 0" />
         <parent link="body" />
         <child link="left_wheel" />
         <axis xyz="0 0 1" />
@@ -80,17 +80,17 @@
             </material>
         </collision>
         <inertial>
-            <origin xyz="0 0 -0.014" rpy="0 0 0" />
+            <origin xyz="-9.30224e-34 0 -0.014" rpy="0 0 0" />
             <mass value="0.410645" />
-            <inertia ixx="0.000429492" ixy="0" ixz="0" iyy="0.000805326" iyz="0" izz="0.000429492" />
+            <inertia ixx="0.000429492" ixy="-2.07184e-46" ixz="2.64695e-36" iyy="0.000805326" iyz="3.11645e-35" izz="0.000429492" />
         </inertial>
     </link>
 
     <joint name="rwheel" type="revolute">
-        <origin xyz="0.135148 2.90755e-05 -0.03878" rpy="-1.5708 -0 1.5708" />
+        <origin xyz="-0.219373 -0.078494 -0.0289244" rpy="1.66533e-16 1.5708 0" />
         <parent link="body" />
         <child link="right_wheel" />
-        <axis xyz="0 0 1" />
+        <axis xyz="0 0 -1" />
         <limit effort="1" velocity="20" />
         <joint_properties friction="0.0" />
     </joint>
