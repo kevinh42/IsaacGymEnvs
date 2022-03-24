@@ -247,17 +247,18 @@ class Twip(VecTask):
         if self.randomize:
             self.apply_randomizations(self.randomization_params)
 
-        positions = torch_rand_float(-0.2, 0.2, (len(env_ids), self.num_dof), device=self.device)
+        positions = torch_rand_float(-10., 10., (len(env_ids), self.num_dof), device=self.device)
         positions[:, self.free_dofs] = 0
         
-        vel_dir = (torch.randint(0,2,(len(env_ids), 1),dtype=torch.float, device=self.device)*2-1).repeat(1,self.num_dof)
+        vel_dir = (torch.randint(0,2,(len(env_ids), 1),dtype=torch.float32, device=self.device)*2-1).repeat(1,self.num_dof)
         velocities = torch_rand_float(0, self.max_velocity, (len(env_ids), 1), device=self.device).repeat(1,self.num_dof) * vel_dir
         velocities[:, self.free_dofs] = 0
            
         self.dof_pos[env_ids] = positions
         self.dof_vel[env_ids] = velocities
 
-        roll_dir = (torch.randint(0,2,(len(env_ids), 1),dtype=torch.float, device=self.device)*2-1)
+        # Apply random pitch at start
+        roll_dir = (torch.randint(0,2,(len(env_ids), 1),dtype=torch.float32, device=self.device)*2-1)
         pitch = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device)
         roll = torch_rand_float(0.15, 0.24, (len(env_ids), 1), device=self.device) * roll_dir
         yaw = torch_rand_float(0, 0, (len(env_ids), 1), device=self.device)
@@ -286,6 +287,11 @@ class Twip(VecTask):
         self.gym.set_dof_state_tensor_indexed(self.sim,
                                               gymtorch.unwrap_tensor(self.dof_state),
                                               gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
+
+        # Apply random torque at start
+        random_torques = torch.zeros((self.num_envs, self.num_bodies, 3), device=self.device, dtype=torch.float32)
+        random_torques[env_ids,0,0] = torch_rand_float(-40., 40., (len(env_ids),1), device=self.device)[:,0]
+        self.gym.apply_rigid_body_force_tensors(self.sim, None, gymtorch.unwrap_tensor(random_torques), gymapi.ENV_SPACE)
 
         self.progress_buf[env_ids] = 0
         self.reset_buf[env_ids] = 0
@@ -386,7 +392,7 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
     #reward = 1.0 - pole_angle #+ 0.1 * torch.abs(cart_vel)
-    reward = 1.0 - torch.tanh(8*pole_angle) - 0.01 * torch.tanh(2*last_vel) - 0.05 * pos
+    reward = 1.0 - torch.tanh(8*pole_angle) - 0.05 * torch.tanh(2*last_vel) - 0.1 * pos
 
     # adjust reward for reset agents
     #reward = torch.where(torch.abs(pole_angle) > 0.25, torch.ones_like(reward) * -2.0, reward)

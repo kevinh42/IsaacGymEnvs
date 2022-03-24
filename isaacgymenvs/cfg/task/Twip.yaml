@@ -8,7 +8,7 @@ env:
 #  numEnvs: ${...num_envs}
   numEnvs: ${resolve_default:256,${...num_envs}}
   envSpacing: 2
-  episodeLength: 1000
+  episodeLength: 250
   enableDebugVis: False
 
   controlMode: "velocity" # "velocity" or "effort"
@@ -54,7 +54,7 @@ sim:
     num_velocity_iterations: 1
     contact_offset: 0.02
     rest_offset: 0.0
-    bounce_threshold_velocity: 100. # make this high since we don't want bouncing
+    bounce_threshold_velocity: 2.0
     max_depenetration_velocity: 10.0
     default_buffer_size_multiplier: 5.0
     max_gpu_contact_pairs: 8388608 # 8*1024*1024
@@ -78,7 +78,7 @@ task:
       twip:
         color: True
         rigid_body_properties:
-          mass: 
+          mass:
             range: [0.5, 1.5]
             operation: "scaling"
             distribution: "uniform"
