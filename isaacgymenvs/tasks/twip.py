@@ -298,6 +298,7 @@ class Twip(VecTask):
 
 
     def pre_physics_step(self, actions):
+        
         self.actions = actions.clone().to(self.device)
         #print(self.actions)
         #self.actions[:] = 1
@@ -392,7 +393,7 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
     #reward = 1.0 - pole_angle #+ 0.1 * torch.abs(cart_vel)
-    reward = 1.0 - torch.tanh(8*pole_angle) - 0.05 * torch.tanh(2*last_vel) - 0.1 * pos
+    reward = 1.0 - torch.tanh(8*pole_angle) - 0.05 * torch.tanh(2*last_vel) - 0.05 * pos
 
     # adjust reward for reset agents
     #reward = torch.where(torch.abs(pole_angle) > 0.25, torch.ones_like(reward) * -2.0, reward)
