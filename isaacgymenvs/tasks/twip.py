@@ -72,7 +72,7 @@ class Twip(VecTask):
         self.plane_dynamic_friction = self.cfg["env"]["plane"]["dynamicFriction"]
         self.plane_restitution = self.cfg["env"]["plane"]["restitution"]
 
-        self.cfg["env"]["numObservations"] = 3
+        self.cfg["env"]["numObservations"] = 2
         self.cfg["env"]["numActions"] = 1 #2
 
         super().__init__(config=self.cfg, sim_device=sim_device, graphics_device_id=graphics_device_id, headless=headless)
@@ -235,7 +235,7 @@ class Twip(VecTask):
         dof_idx = list(range(self.num_dof))
         for i in self.free_dofs:
             dof_idx.remove(i)
-        self.obs_buf[env_ids,2] = torch.tanh(torch.mean(self.dof_pos[env_ids][:,dof_idx],dim=1))
+        #self.obs_buf[env_ids,2] = torch.tanh(torch.mean(self.dof_pos[env_ids][:,dof_idx],dim=1))
 
         #self.obs_buf[env_ids,0:4] = self.body_ori[env_ids,self.imu_frame_index].squeeze() #chassis orientation
         #self.obs_buf[env_ids,4:7] = self.body_linvel[env_ids,self.imu_frame_index].squeeze() #chassis linvel
@@ -384,7 +384,7 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     #pole_angle = torch.abs(x)
     pole_angle = torch.abs(obs_buf[:,0])
     last_vel = torch.abs(obs_buf[:,1])
-    pos = torch.abs(obs_buf[:,2])
+    #pos = torch.abs(obs_buf[:,2])
     #pole_angle[:]=0.5
     #pole_angle[pole_angle> 1-(1*0.01745)] = 1 #max reward within about +-1 degrees
 
@@ -393,7 +393,7 @@ def compute_twip_reward(obs_buf, reset_dist, reset_buf, progress_buf, max_episod
     # reward is combo of angle deviated from upright, velocity of cart, and velocity of pole moving
     #reward = 1.0 - pole_angle * pole_angle - 0.01 * torch.abs(cart_vel) - 0.005 * torch.abs(pole_vel)
     #reward = 1.0 - pole_angle #+ 0.1 * torch.abs(cart_vel)
-    reward = 1.0 - torch.tanh(8*pole_angle) - 0.05 * torch.tanh(2*last_vel) - 0.05 * pos
+    reward = 1.0 - torch.tanh(8*pole_angle) - 0.05 * torch.tanh(2*last_vel)# - 0.05 * pos
 
     # adjust reward for reset agents
     #reward = torch.where(torch.abs(pole_angle) > 0.25, torch.ones_like(reward) * -2.0, reward)
