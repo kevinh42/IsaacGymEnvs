@@ -114,31 +114,22 @@ def launch_rlg_hydra(cfg: DictConfig):
     with open(os.path.join(experiment_dir, 'config.yaml'), 'w') as f:
         f.write(OmegaConf.to_yaml(cfg))
 
-    # Export ONNX for inference
-    print("exporting!")
+    # Begin exporting ONNX for inference
+    print("Exporting!")
+
     # Load model from checkpoint
     player = runner.create_player()
     player.restore(runner.load_path)
+
     # Create dummy observations tensor for tracing torch model
     obs_shape = player.obs_shape
     actions_num = player.actions_num
     obs_num = obs_shape[0]
     dummy_input = torch.zeros(obs_shape, device='cuda:0')
-    #dummy_input_unsqueeze = torch.unsqueeze(dummy_input,0)
-    #dummy_input_unsqueeze = player._preproc_obs(dummy_input_unsqueeze)
 
-    #Turn normalize_input off when training
-    
-    # dummy_input_dict = {
-    #     'obs' : dummy_input_unsqueeze,
-    #     'rnn_states' : None,
-    #     'is_train': False
-    # }
-    # We need to flatten the inputs and outputs of the model: see https://github.com/Denys88/rl_games/issues/92
-    onnx_file = os.path.split(cfg.checkpoint)[-1]+".onnx"
-    print(player.model)
-
-    class ActorModelA2CContinuousLogStd(torch.nn.Module):
+    # Simplified network for actor inference
+    # Tested for continuous_a2c_logstd
+    class ActorModel(torch.nn.Module): 
         def __init__(self, a2c_network):
             super().__init__()
             self.a2c_network = a2c_network
@@ -146,8 +137,10 @@ def launch_rlg_hydra(cfg: DictConfig):
             x = self.a2c_network.actor_mlp(x)
             x = self.a2c_network.mu(x)
             return x
+    model = ActorModel(player.model.a2c_network)
 
-    model = ActorModelA2CContinuousLogStd(player.model.a2c_network)
+    # Since rl_games uses dicts, we can flatten the inputs and outputs of the model: see https://github.com/Denys88/rl_games/issues/92
+    # Not necessary with the custom ActorModel defined above, but code is included here if needed
     import flatten as flatten
     with torch.no_grad():
         adapter = flatten.TracingAdapter(model, dummy_input, allow_non_tensor=True)
@@ -156,16 +149,14 @@ def launch_rlg_hydra(cfg: DictConfig):
             output_names = ['actions']) # outputs are mu (actions), sigma, value
         traced = torch.jit.trace(adapter, dummy_input,check_trace=True)
         flattened_outputs = traced(dummy_input)
-    print(f"exported to {cfg.checkpoint}.onnx!")
-    print("Flattened outputs: ", flattened_outputs)
+    print(f"Exported to {cfg.checkpoint}.onnx!")
 
+    # Print dummy output and model output (make sure these have the same values)
+    print("Flattened outputs: ", flattened_outputs)
     print(model.forward(dummy_input))
 
-    # print("# Observations: ", obs_num)
-    # print("# Actions: ", actions_num)
-    # # Generate a controller configuration that can be loaded in gym2real
-    # controller_config = f"{cfg.task_name}:\n\tobservations: {obs_num*4}\n\tactions: {actions_num*4}"
-    # print(controller_config)
+    print("# Observations: ", obs_num)
+    print("# Actions: ", actions_num)
 
 
 if __name__ == "__main__":
